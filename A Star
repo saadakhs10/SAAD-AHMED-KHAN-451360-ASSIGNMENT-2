@@ -1,0 +1,169 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+// Struct representing the state of the puzzle
+struct PuzzleState {
+    vector<vector<int>> puzzle; // The current configuration of the puzzle
+    int g, h_manhattan, h_misplaced; // g: cost from the start state, h_manhattan: Manhattan distance heuristic, h_misplaced: Misplaced tiles heuristic
+
+    // Comparison operator for priority queue
+    bool operator<(const PuzzleState& other) const {
+        return g + h_manhattan + h_misplaced > other.g + other.h_manhattan + other.h_misplaced;
+    };
+};
+
+// Function to calculate the Manhattan distance heuristic
+int calculateManhattanDistance(const vector<vector<int>>& state, const vector<vector<int>>& goal) {
+    int h = 0;
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            if (state[i][j] != 0){
+                    int targetI = (state[i][j]-1)/3;
+                    int targetJ = (state[i][j]-1)/3;
+                    h += abs(i - targetI) + abs(j - targetJ);
+
+            }
+
+    return h;
+}
+
+// Function to calculate the Misplaced tiles heuristic
+int calculateMisplacedTiles(const vector<vector<int>>& state, const vector<vector<int>>& goal) {
+    int h = 0;
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            if (state[i][j] != 0 && state[i][j] != goal[i][j])
+                h++;
+    return h;
+}
+
+// Function to calculate both heuristics
+pair<int, int> calculateHeuristics(const vector<vector<int>>& state, const vector<vector<int>>& goal) {
+    int h_manhattan = calculateManhattanDistance(state, goal);
+    int h_misplaced = calculateMisplacedTiles(state, goal);
+    return {h_manhattan, h_misplaced};
+}
+
+// Function to print the puzzle state
+void printPuzzle(const vector<vector<int>>& state) {
+    for (const auto& row : state) {
+        for (int val : row) cout << val << ' ';
+        cout << endl;
+    }
+}
+
+// Function to check if the current state is the goal state
+bool isGoalState(const vector<vector<int>>& state, const vector<vector<int>>& goal) {
+    return state == goal;
+}
+
+// Function to find the empty space in the puzzle
+pair<int, int> findEmptySpace(const vector<vector<int>>& state) {
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            if (state[i][j] == 0) return {i, j};
+    return {-1, -1};
+}
+
+// Function to generate possible next states by moving the empty space
+vector<vector<vector<int>>> generateNextStates(const vector<vector<int>>& state) {
+    vector<vector<vector<int>>> nextStates;
+
+    auto [emptyI, emptyJ] = findEmptySpace(state);
+
+    const vector<int> di = {-1, 1, 0, 0};
+    const vector<int> dj = {0, 0, -1, 1};
+
+    for (int k = 0; k < 4; ++k) {
+        int ni = emptyI + di[k];
+        int nj = emptyJ + dj[k];
+
+        if (ni >= 0 && ni < 3 && nj >= 0 && nj < 3) {
+            vector<vector<int>> nextState = state;
+            swap(nextState[emptyI][emptyJ], nextState[ni][nj]);
+            nextStates.push_back(nextState);
+        }
+    }
+
+    return nextStates;
+}
+
+// Function to solve the 8-Puzzle using A* search
+void solvePuzzle(const vector<vector<int>>& initialState, const vector<vector<int>>& goalState) {
+    // Check if the initial state is already the goal state
+    if (isGoalState(initialState, goalState)) {
+        cout << "The initial state is already the goal state.\n";
+        return;
+    }
+
+    priority_queue<PuzzleState> pq;
+    map<vector<vector<int>>, int> cost;
+
+    auto [h_manhattan, h_misplaced] = calculateHeuristics(initialState, goalState);
+
+    PuzzleState startState = {initialState, 0, h_manhattan, h_misplaced};
+    pq.push(startState);
+    cost[initialState] = 0;
+
+    cout << "Initial State:\n";
+    printPuzzle(initialState);
+
+    cout << "Number of Misplaced Tiles: " << h_misplaced << endl;
+    cout << "Manhattan Distance: " << h_manhattan << endl;
+
+    while (!pq.empty()) {
+        PuzzleState currentState = pq.top();
+        pq.pop();
+
+        //cout << "Current State:\n";
+       // printPuzzle(currentState.puzzle);
+
+        if (isGoalState(currentState.puzzle, goalState)) {
+            cout << "Solution found!\nGoal state reached with total cost: " << h_misplaced + h_manhattan << "\nGoal State Achieved:\n";
+            printPuzzle(currentState.puzzle);
+            return;
+        }
+
+        for (const auto& nextState : generateNextStates(currentState.puzzle)) {
+            int newCost = currentState.g + 1;
+
+            // If the next state is not visited or the new cost is lower than the recorded cost
+            if (cost.find(nextState) == cost.end() || newCost < cost[nextState]) {
+                cost[nextState] = newCost;
+                auto [h_manhattan_next, h_misplaced_next] = calculateHeuristics(nextState, goalState);
+                PuzzleState nextPuzzleState = {nextState, newCost, h_manhattan_next, h_misplaced_next};
+                pq.push(nextPuzzleState);
+            }
+        }
+
+    }
+
+    cout << "Goal state not reachable.\n";
+}
+
+
+// Main function
+int main() {
+    vector<vector<int>> initialState, goalState;
+
+    // Input the initial state of the 8-Puzzle Problem
+    cout << "Enter the initial state of the 8-Puzzle (3x3 grid, use 0 for the blank tile):\n";
+    for (int i = 0; i < 3; ++i) {
+        vector<int> row;
+        for (int j = 0; j < 3; ++j) {
+            int val;
+            cin >> val;
+            row.push_back(val);
+        }
+        initialState.push_back(row);
+    }
+
+    // Define the goal state
+    goalState = {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}};
+
+    // Solve the puzzle using A* Search
+    cout << "\nApplying A* Search :\n";
+    solvePuzzle(initialState, goalState);
+
+    return 0;
+}
