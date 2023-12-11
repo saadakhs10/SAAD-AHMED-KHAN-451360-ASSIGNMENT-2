@@ -1,0 +1,189 @@
+#include <bits/stdc++.h>
+
+using namespace std;
+
+// Structure to represent a state in the puzzle
+struct PuzzleState {
+    vector<vector<int>> puzzle;
+    int manhattanHeuristic;  // Manhattan Distance heuristic value for the state
+    int misplacedTilesHeuristic;  // Misplaced Tiles heuristic value for the state
+
+    PuzzleState(const vector<vector<int>>& p, int mh, int mth) : puzzle(p), manhattanHeuristic(mh), misplacedTilesHeuristic(mth) {}
+
+    // Add an operator for hashing PuzzleState
+    bool operator==(const PuzzleState& other) const {
+        return puzzle == other.puzzle;
+    }
+};
+
+// Add a hash function for PuzzleState
+namespace std {
+    template <>
+    struct hash<PuzzleState> {
+        size_t operator()(const PuzzleState& state) const {
+            // Simple hash function for vector<vector<int>>
+            size_t hash_value = 0;
+            for (const auto& row : state.puzzle) {
+                for (int num : row) {
+                    hash_value ^= hash<int>{}(num) + 0x9e3779b9 + (hash_value << 6) + (hash_value >> 2);
+                }
+            }
+            return hash_value;
+        }
+    };
+}
+
+// Function to print the puzzle puzzle
+void printBoard(const vector<vector<int>>& puzzle) {
+    for (const auto& row : puzzle) {
+        for (int num : row) {
+            cout << num << " ";
+        }
+        cout << endl;
+    }
+}
+
+// Function to check if two puzzle states are equal
+bool isEqual(const vector<vector<int>>& a, const vector<vector<int>>& p) {
+    return a == p;
+}
+
+// Function to calculate the Manhattan Distance heuristic for the Eight Puzzle
+int calculateManhattanDistance(const vector<vector<int>>& state, const vector<vector<int>>& goal) {
+    int distance = 0;
+    for (int i = 0; i < state.size(); ++i) {
+        for (int j = 0; j < state[i].size(); ++j) {
+            int value = state[i][j];
+            if (value != 0) {
+                int goalRow, goalCol;
+                for (int x = 0; x < goal.size(); ++x) {
+                    for (int y = 0; y < goal[x].size(); ++y) {
+                        if (goal[x][y] == value) {
+                            goalRow = x;
+                            goalCol = y;
+                            break;
+                        }
+                    }
+                }
+                distance += abs(i - goalRow) + abs(j - goalCol);
+            }
+        }
+    }
+    return distance;
+}
+
+// Function to calculate the Misplaced Tiles heuristic for the Eight Puzzle
+int calculateMisplacedTiles(const vector<vector<int>>& state, const vector<vector<int>>& goal) {
+    int misplacedTiles = 0;
+
+    // Check if the matrices have the same dimensions
+    if (state.size() != goal.size() || state.empty() || state[0].size() != goal[0].size()) {
+        // Handle the error, e.g., print an error message or return a specific value.
+        cerr << "Error: Matrices have different dimensions." << endl;
+        return -1;  // or any other suitable error code
+    }
+
+    // Loop through each element in the matrices
+    for (int i = 0; i < state.size(); i++) {
+        for (int j = 0; j < state[i].size(); j++) {
+            // Check if the values are different
+            if (state[i][j] != goal[i][j]) {
+                misplacedTiles++;
+            }
+        }
+    }
+
+    return misplacedTiles;
+}
+
+
+// Function to perform Greedy Search with Manhattan and Misplaced Tiles heuristics
+void greedySearch(const vector<vector<int>>& initial, const vector<vector<int>>& goal) {
+    // Priority queue to store PuzzleState based on heuristic value
+    priority_queue<PuzzleState, vector<PuzzleState>, function<bool(const PuzzleState&, const PuzzleState&)>> pq(
+        [](const PuzzleState& a, const PuzzleState& p) {
+            return a.manhattanHeuristic + a.misplacedTilesHeuristic > p.manhattanHeuristic + p.misplacedTilesHeuristic;
+        }
+    );
+
+    // HashSet to keep track of visited states
+    unordered_set<PuzzleState> visited;
+
+    // Initialize the initial state
+    PuzzleState initialState(initial, calculateManhattanDistance(initial, goal), calculateMisplacedTiles(initial, goal));
+    pq.push(initialState);
+
+    // Greedy Search loop
+    while (!pq.empty()) {
+        PuzzleState current = pq.top();
+        pq.pop();
+
+        // Check if the current state is the goal state
+        if (isEqual(current.puzzle, goal)) {
+            cout << "Solution Found!\nGoal state reached with Manhattan Distance heuristic value: "
+                 << calculateManhattanDistance(initial, goal)
+                 << " and Misplaced Tiles heuristic value: " << calculateMisplacedTiles(initial, goal) << "\nGoal State Achieved:\n";
+            printBoard(current.puzzle);
+            return;
+        }
+
+        // Mark the current state as visited
+        visited.insert(current);
+
+        // Generate next states and add them to the priority queue if not visited
+        // (We only consider moving the blank tile left, right, up, or down)
+        const vector<int> dx = {0, 0, -1, 1};
+        const vector<int> dy = {-1, 1, 0, 0};
+
+        for (int dir = 0; dir < 4; ++dir) {
+            int newBlankRow = -1, newBlankCol = -1;
+            // Find the position of the blank tile
+            for (int i = 0; i < current.puzzle.size(); ++i) {
+                for (int j = 0; j < current.puzzle[i].size(); ++j) {
+                    if (current.puzzle[i][j] == 0) {
+                        newBlankRow = i + dx[dir];
+                        newBlankCol = j + dy[dir];
+                        break;
+                    }
+                }
+                if (newBlankRow != -1 && newBlankCol != -1) {
+                    break;  // Break once the blank tile is found
+                }
+            }
+            // Check if the new position is valid
+            if (newBlankRow >= 0 && newBlankRow < current.puzzle.size() &&
+                newBlankCol >= 0 && newBlankCol < current.puzzle[0].size()) {
+                // Create a new state by swapping the blank tile with the adjacent tile
+                vector<vector<int>> newBoard = current.puzzle;
+                swap(newBoard[newBlankRow][newBlankCol], newBoard[newBlankRow - dx[dir]][newBlankCol - dy[dir]]);
+                // Check if the new state has not been visited
+                PuzzleState newState(newBoard, calculateManhattanDistance(newBoard, goal), calculateMisplacedTiles(newBoard, goal));
+                if (visited.find(newState) == visited.end()) {
+                    // Add the new state to the priority queue
+                    pq.push(newState);
+                }
+            }
+        }
+    }
+
+    cout << "Goal state not reachable.\n";
+}
+
+int main() {
+    // Prompt user to enter the initial state
+    cout << "Enter the initial state of the 8-puzzle (3x3 grid, use 0 for the blank tile):\n";
+    vector<vector<int>> initial(3, vector<int>(3));
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            cin >> initial[i][j];
+        }
+    }
+
+    // Define the goal state
+    vector<vector<int>> goal = {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}};
+
+    cout << "\nApplying Greedy Search with Manhattan and Misplaced Tiles Heuristics:\n";
+    greedySearch(initial, goal);
+
+    return 0;
+}
